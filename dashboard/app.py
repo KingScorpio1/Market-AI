@@ -12,6 +12,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import threading
+from bot.bot_runner import run_scanner
 
 # Import backend modules
 from backend.data_fetcher import get_price_data, get_news_headlines
@@ -19,6 +21,11 @@ from backend.indicators import add_indicators
 from backend.ai_engine import trading_signal, anomaly_detector, calculate_crash_risk
 from backend.sentiment import analyze_sentiment
 from backend.portfolio_manager import get_portfolio_status
+
+if 'bot_thread' not in st.session_state:
+    thread = threading.Thread(target=run_scanner, daemon=True)
+    thread.start()
+    st.session_state.bot_thread = True
 
 # --- PAGE CONFIG ---
 st.set_page_config(layout="wide", page_title="AI Institutional Scanner", page_icon="🤖")
