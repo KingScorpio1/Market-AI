@@ -1,0 +1,25 @@
+market_ai/
+│
+├── backend/
+│   ├── data_fetcher.py
+│   ├── indicators.py
+│   ├── sentiment.py
+│   ├── ai_engine.py
+│   ├── portfolio_manager.py
+│   ├── alerts.py
+│   ├── sentiment.py
+│   ├── __init__.py
+│   └── main.py
+│
+├── dashboard/
+│   ├── app.py
+│   ├── __init__.py
+│
+├── bot/
+│   ├── telegram_bot.py
+│   ├── bot_runner.py
+│   ├── stock_scalper.py
+│   └──  __init__.py
+│
+├── requirements.txt
+└── README.md

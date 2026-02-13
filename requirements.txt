@@ -1,0 +1,12 @@
+pandas
+numpy
+requests
+yfinance
+ta
+scikit-learn
+transformers
+textblob
+torch
+streamlit
+python-telegram-bot
+pytz
