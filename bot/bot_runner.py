@@ -9,17 +9,18 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT_DIR))
 
-from backend.data_fetcher import get_price_data, get_news_headlines
+from backend.data_fetcher import get_price_data, get_current_price, get_news_headlines
 from backend.indicators import add_indicators
 from backend.ai_engine import trading_signal, anomaly_detector
 from backend.sentiment import analyze_sentiment
-from backend.portfolio_manager import execute_trade
+from backend.portfolio_manager import execute_trade, get_portfolio_status, update_high_water_mark
+from backend.predictor import predict_next_price # <--- NEW
 from bot.telegram_bot import send_telegram_message
 
 # --- CONFIGURATION ---
 WATCHLIST = ["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "NVDA", "TSLA", "AAPL", "AMZN"]
 EMAIL_SENDER = "sulesmith38@gmail.com"
-EMAIL_PASSWORD = "moneymakesmoney369!" # Google App Password
+EMAIL_PASSWORD = "xkns egss ipjs snhb" # Google App Password
 EMAIL_RECEIVER = "smithsule63@gmail.com"
 # ---------------------
 
@@ -38,74 +39,88 @@ def send_email_alert(subject, body):
         print(f"Email failed: {e}")
 
 def run_scanner():
-    print("🤖 Institutional AI Scanner Started...")
-    send_telegram_message("🤖 System Online: Tracking Whales & Crash Risk.")
+    print("🤖 Institutional AI System Online (Level 4)...")
+    send_telegram_message("🤖 System Online: ML Predictor + Trailing Stops Active.")
 
     while True:
         for symbol in WATCHLIST:
             try:
-                print(f"🔍 Scanning {symbol}...", end=" ")
+                print(f"🔍 {symbol}...", end=" ")
                 
-                df = get_price_data(symbol)
-                if df.empty:
-                    print("❌ No Data")
+                # 1. FAST PRICE CHECK (Real-Time)
+                current_price = get_current_price(symbol)
+                if current_price is None:
+                    print("Skipping (Price Error)")
                     continue
 
-                df = add_indicators(df)
-                df = anomaly_detector(df) # Calculates Whale/Anomaly
+                # 2. TRAILING STOP LOSS LOGIC
+                update_high_water_mark(symbol, current_price, trader="bot")
                 
+                portfolio = get_portfolio_status("bot")
+                if symbol in portfolio["positions"]:
+                    pos = portfolio["positions"][symbol]
+                    highest = pos.get('highest_price') or pos['entry_price']
+                    
+                    stop_price = highest * 0.97 # 3% Trailing Stop
+                    
+                    if current_price < stop_price:
+                        print(f"📉 Trailing Stop Hit!")
+                        trade_msg = execute_trade(symbol, "SELL", current_price, trader="bot")
+                        send_telegram_message(f"📉 **TRAILING STOP HIT: {symbol}**\nDropped from peak ${highest:.2f}\n{trade_msg}")
+                        continue 
+
+                # 3. AI ANALYSIS & PREDICTION
+                df = get_price_data(symbol)
+                if df.empty: continue
+                
+                df = add_indicators(df)
+                df = anomaly_detector(df)
+                
+                # ML PREDICTION
+                predicted_price = predict_next_price(df)
+                predicted_move = 0.0
+                if predicted_price:
+                    predicted_move = ((predicted_price - current_price) / current_price) * 100
+                
+                # News Sentiment
                 headlines = get_news_headlines(symbol)
                 sentiment = analyze_sentiment(headlines)
-                
-                # Get Signal (Now includes Crash Risk text)
+
+                # Standard Signals
                 signal = trading_signal(df, sentiment)
-                current_price = df['Close'].iloc[-1]
-                crash_risk = 0 # Default
                 
-                # Extract risk % from signal string if present
-                if "Risk:" in signal:
-                    import re
-                    match = re.search(r"Risk: (\d+)%", signal)
-                    if match: crash_risk = int(match.group(1))
-
-                # --- ALERT LOGIC ---
-                is_whale = df['whale_alert'].iloc[-1] == 1
+                # 4. DECISION ENGINE (Combining Rules + ML)
+                ml_confirmation = predicted_move > 0.5 
                 
-                trade_msg = ""
-                if "BUY" in signal:
-                    trade_msg = execute_trade(symbol, "BUY", current_price)
-                elif "SELL" in signal or "PANIC" in signal:
-                    trade_msg = execute_trade(symbol, "SELL", current_price)
-                # -------------------------
-
-                if "BUY" in signal or "SELL" in signal or is_whale:
-                    print(f"\n🚨 ALERT: {signal} @ ${current_price:.2f}")
+                if "BUY" in signal and ml_confirmation:
+                    print(f"🚀 STRONG BUY (ML Predicts +{predicted_move:.2f}%)")
+                    trade_msg = execute_trade(symbol, "BUY", current_price, trader="bot")
                     
-                    emoji = "🟢" if "BUY" in signal else "🔴"
-                    if "CRITICAL" in signal: emoji = "💀"
-                    
-                    msg = (
-                        f"{emoji} **{symbol} UPDATE**\n"
-                        f"Signal: {signal}\n"
-                        f"Price: ${current_price:.2f}\n"
-                        f"News Score: {sentiment:.2f}\n"
-                        f"🤖 Auto-Trade: {trade_msg}" 
-                    )
+                    msg = (f"🚀 **AI SNIPER ENTRY: {symbol}**\n"
+                           f"Price: ${current_price:.2f}\n"
+                           f"ML Forecast: ${predicted_price:.2f} (+{predicted_move:.2f}%)\n"
+                           f"News Score: {sentiment:.2f}\n"
+                           f"{trade_msg}")
                     
                     send_telegram_message(msg)
-                    
-                    # 2. Email (Only for CRITICAL or BUY)
-                    if "CRITICAL" in signal or "BUY" in signal:
-                        send_email_alert(f"URGENT: {symbol} Signal", msg)
+                    send_email_alert(f"URGENT BUY: {symbol}", msg) # <--- RESTORED EMAIL
                 
+                elif "SELL" in signal:
+                     print(f"SELL SIGNAL")
+                     trade_msg = execute_trade(symbol, "SELL", current_price, trader="bot")
+                     if "✅" in trade_msg:
+                         msg = f"⚠️ **EXIT SIGNAL: {symbol}**\n{trade_msg}"
+                         send_telegram_message(msg)
+                         if "CRITICAL" in signal:
+                             send_email_alert(f"URGENT SELL: {symbol}", msg) # <--- RESTORED EMAIL
                 else:
-                    print(f"✅ HOLD (Risk: {crash_risk}%)")
-                
+                    print(f"HOLD (ML Forecast: {predicted_move:+.2f}%)")
+
             except Exception as e:
-                print(f"\n❌ Error {symbol}: {e}")
+                print(f"Error {symbol}: {e}")
         
-        print("Waiting 60 minutes...")
-        time.sleep(3600)
+        print("\n⏳ Cooling down for 5 minutes...")
+        time.sleep(300)
 
 if __name__ == "__main__":
     run_scanner()

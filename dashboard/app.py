@@ -3,24 +3,26 @@
 import sys
 import time
 from pathlib import Path
-
-# Add project root to system path
-ROOT_DIR = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT_DIR))
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import threading
-from bot.bot_runner import run_scanner
+
+
+# Add project root to system path
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
 # Import backend modules
 from backend.data_fetcher import get_price_data, get_news_headlines
 from backend.indicators import add_indicators
 from backend.ai_engine import trading_signal, anomaly_detector, calculate_crash_risk
 from backend.sentiment import analyze_sentiment
-from backend.portfolio_manager import get_portfolio_status
+from backend.portfolio_manager import get_portfolio_status, execute_trade
+from bot.bot_runner import run_scanner
+
+
 
 if 'bot_thread' not in st.session_state:
     thread = threading.Thread(target=run_scanner, daemon=True)
@@ -185,59 +187,100 @@ with tab2:
             else:
                 st.info("No trades triggered by strategy in this period.")
 # ==========================================
-# TAB 3: LIVE PORTFOLIO (PAPER TRADING)
+# TAB 3: MAN VS MACHINE ARENA
 # ==========================================
 with tab3:
-    st.header("💼 Paper Trading Portfolio")
-    st.caption("Real-time tracking of bot performance (Virtual Money)")
+    st.header("⚔️ Man vs. Machine: The Trading Arena")
     
-    # 1. Load Data
-    data = get_portfolio_status()
-    balance = data["balance"]
-    positions = data["positions"]
-    history = data["history"]
+    # --- 1. SCOREBOARD ---
+    bot_stats = get_portfolio_status("bot")
+    human_stats = get_portfolio_status("human")
     
-    # 2. Calculate Total Equity
-    equity = balance
-    active_positions = []
+    col1, col2 = st.columns(2)
     
-    if positions:
-        for sym, pos in positions.items():
-            # We need current price to calc unrealized PnL
-            # (Fetching live price might be slow, so we just show entry for now 
-            # or fetch if you want precision)
-            current_val = pos["shares"] * pos["entry_price"] # Placeholder for live value
-            equity += current_val
-            
-            active_positions.append({
-                "Asset": sym,
-                "Entry Price": f"${pos['entry_price']:.2f}",
-                "Shares": f"{pos['shares']:.4f}",
-                "Entry Time": pos["time"]
-            })
+    with col1:
+        st.subheader("🤖 The Bot")
+        bot_equity = bot_stats["balance"] + sum([p['shares']*p['entry_price'] for p in bot_stats['positions'].values()])
+        st.metric("Bot Equity", f"${bot_equity:,.2f}", delta=f"${bot_equity-10000:,.2f}")
+        st.write(f"Cash: ${bot_stats['balance']:,.2f}")
+        
+    with col2:
+        st.subheader("👤 The Human (You)")
+        human_equity = human_stats["balance"] + sum([p['shares']*p['entry_price'] for p in human_stats['positions'].values()])
+        st.metric("Human Equity", f"${human_equity:,.2f}", delta=f"${human_equity-10000:,.2f}")
+        st.write(f"Cash: ${human_stats['balance']:,.2f}")
+
+    st.markdown("---")
+
+    # --- 2. HUMAN TRADING TERMINAL ---
+    st.subheader("🎮 Manual Trade Terminal")
     
-    # 3. Scoreboard
-    total_profit = equity - 10000
-    col1, col2, col3 = st.columns(3)
-    col1.metric("💵 Cash Balance", f"${balance:,.2f}")
-    col2.metric("💰 Total Equity", f"${equity:,.2f}", delta=f"{total_profit:,.2f}")
-    col3.metric("🔓 Open Positions", len(positions))
-    
-    # 4. Tables
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns([1, 1, 2])
     with c1:
-        st.subheader("Holdings")
-        if active_positions:
-            st.dataframe(pd.DataFrame(active_positions), use_container_width=True)
-        else:
-            st.info("No active positions. Cash is King! 👑")
-            
+        trade_symbol = st.selectbox("Asset", ["BTC-USD", "ETH-USD", "SOL-USD", "NVDA", "TSLA"])
     with c2:
-        st.subheader("Trade History")
-        if history:
-            hist_df = pd.DataFrame(history)
-            # Reorder columns for readability
-            hist_df = hist_df[["time", "symbol", "action", "price", "profit"]]
-            st.dataframe(hist_df.sort_values("time", ascending=False), use_container_width=True)
-        else:
-            st.info("No trades executed yet.")
+        action = st.radio("Action", ["BUY", "SELL"], horizontal=True)
+    with c3:
+        st.write("") # Spacer
+        if st.button("🚀 Execute Trade"):
+            # Get real price
+            try:
+                price_df = get_price_data(trade_symbol, period="1d", interval="1m")
+                current_price = price_df["Close"].iloc[-1]
+                
+                # Execute Trade
+                msg = execute_trade(trade_symbol, action, current_price, trader="human")
+                
+                if "✅" in msg:
+                    st.success(msg)
+                    
+                    # --- AI CRITIQUE ---
+                    # The bot analyzes YOUR trade instantly
+                    with st.spinner("🤖 Analyzing your decision..."):
+                        # Re-run analysis on the symbol
+                        df_check = add_indicators(price_df)
+                        df_check = anomaly_detector(df_check)
+                        risk = calculate_crash_risk(df_check.iloc[-1])
+                        rsi = df_check['rsi'].iloc[-1]
+                        
+                        st.markdown(f"### 🤖 Bot's Critique:")
+                        if action == "BUY":
+                            if risk > 60:
+                                st.error(f"WARNING: You bought {trade_symbol} while Crash Risk is {risk}%! Risky move, human.")
+                            elif rsi > 70:
+                                st.warning(f"Note: RSI is {rsi:.0f} (Overbought). I would have waited for a dip.")
+                            else:
+                                st.balloons()
+                                st.info(f"Nice entry! Indicators look healthy (Risk: {risk}%).")
+                        elif action == "SELL":
+                            if rsi < 30:
+                                st.error("You sold at the bottom? RSI is low. Panic selling?")
+                            else:
+                                st.success("Profit taking is always good.")
+                else:
+                    st.error(msg)
+                    
+            except Exception as e:
+                st.error(f"Trade Failed: {e}")
+
+    # --- 3. POSITIONS TABLE ---
+    st.subheader("🏆 Active Positions Comparison")
+    
+    # Helper to format positions
+    def format_pos(positions_dict, owner):
+        rows = []
+        for sym, pos in positions_dict.items():
+            rows.append({
+                "Owner": owner,
+                "Asset": sym,
+                "Entry": f"${pos['entry_price']:.2f}",
+                "Shares": f"{pos['shares']:.4f}"
+            })
+        return rows
+
+    all_pos = format_pos(bot_stats["positions"], "🤖 Bot") + format_pos(human_stats["positions"], "👤 You")
+    
+    if all_pos:
+        st.dataframe(pd.DataFrame(all_pos), use_container_width=1000)
+    else:
+        st.info("No active positions.")
