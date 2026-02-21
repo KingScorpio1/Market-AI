@@ -13,3 +13,4 @@ pytz
 plotly
 supabase
 python-dotenv
+feedparser

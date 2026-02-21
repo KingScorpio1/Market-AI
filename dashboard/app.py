@@ -215,48 +215,84 @@ with tab3:
     # --- 2. HUMAN TRADING TERMINAL ---
     st.subheader("🎮 Manual Trade Terminal")
     
-    c1, c2, c3 = st.columns([1, 1, 2])
+    # Create 4 columns now
+    c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+    
     with c1:
         trade_symbol = st.selectbox("Asset", ["BTC-USD", "ETH-USD", "SOL-USD", "NVDA", "TSLA"])
     with c2:
         action = st.radio("Action", ["BUY", "SELL"], horizontal=True)
     with c3:
-        st.write("") # Spacer
+        # NEW: Custom Amount Input
+        # We assume you only need this for buying. Selling usually sells the whole position.
+        custom_amount = st.number_input("Amount ($)", min_value=10.0, max_value=100000.0, value=1000.0, step=100.0)
+    with c4:
+        st.write("") # Spacer to align button
+        st.write("") 
         if st.button("🚀 Execute Trade"):
             # Get real price
             try:
                 price_df = get_price_data(trade_symbol, period="1d", interval="1m")
                 current_price = price_df["Close"].iloc[-1]
                 
-                # Execute Trade
-                msg = execute_trade(trade_symbol, action, current_price, trader="human")
+                # Execute Trade (Pass the custom amount!)
+                msg = execute_trade(trade_symbol, action, current_price, trader="human", amount=custom_amount if action == "BUY" else None)
                 
                 if "✅" in msg:
                     st.success(msg)
                     
                     # --- AI CRITIQUE ---
-                    # The bot analyzes YOUR trade instantly
                     with st.spinner("🤖 Analyzing your decision..."):
                         # Re-run analysis on the symbol
                         df_check = add_indicators(price_df)
+                        
+                        # --- FIX FOR THE CRASH ---
+                        # We must calculate atr_avg MANUALLY here because the dataframe is too short
+                        # or trading_signal helper wasn't called.
+                        df_check['atr_avg'] = df_check['atr'].rolling(window=20).mean()
+                        
                         df_check = anomaly_detector(df_check)
+                        
+                        # Now it's safe to calculate risk
                         risk = calculate_crash_risk(df_check.iloc[-1])
                         rsi = df_check['rsi'].iloc[-1]
                         
                         st.markdown(f"### 🤖 Bot's Critique:")
                         if action == "BUY":
                             if risk > 60:
-                                st.error(f"WARNING: You bought {trade_symbol} while Crash Risk is {risk}%! Risky move, human.")
+                                st.error(f"WARNING: High Risk ({risk}%)! I wouldn't have done that.")
                             elif rsi > 70:
-                                st.warning(f"Note: RSI is {rsi:.0f} (Overbought). I would have waited for a dip.")
+                                st.warning(f"Careful: RSI is {rsi:.0f} (Overbought).")
                             else:
                                 st.balloons()
-                                st.info(f"Nice entry! Indicators look healthy (Risk: {risk}%).")
+                                st.info(f"Nice entry! Risk is low ({risk}%).")
                         elif action == "SELL":
-                            if rsi < 30:
-                                st.error("You sold at the bottom? RSI is low. Panic selling?")
+                            # 1. Check if it was a Loss or Profit based on the message
+                            # The message looks like: "✅ HUMAN SOLD ETH-USD (Profit: $-53.38)"
+                            is_loss = "$-" in msg 
+                            
+                            if is_loss:
+                                st.warning("📉 Realized Loss.")
+                                
+                                # AI Critique on the Loss
+                                if rsi < 30:
+                                    st.error("🤖 Critique: You Panic Sold! RSI is low (<30), meaning the price was already at the bottom. Next time wait for a bounce.")
+                                elif risk > 80:
+                                    st.success("🤖 Critique: Good stop-loss. Crash risk was high, better to get out with a small loss than a big one.")
+                                else:
+                                    st.info("🤖 Critique: You cut your losses. Discipline is key.")
+                                    
                             else:
-                                st.success("Profit taking is always good.")
+                                st.success("💰 Profit Secured!")
+                                
+                                # AI Critique on the Win
+                                if rsi > 70:
+                                    st.balloons()
+                                    st.success("🤖 Critique: Perfect timing! You sold the top (Overbought RSI).")
+                                elif rsi < 50:
+                                    st.warning("🤖 Critique: You sold a bit early? The trend might still have room to run.")
+                                else:
+                                    st.info("🤖 Critique: Green is green. Good trade.")
                 else:
                     st.error(msg)
                     

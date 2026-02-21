@@ -32,7 +32,11 @@ def get_portfolio_status(trader="bot"):
         "history": hist_data.data
     }
 
-def execute_trade(symbol, action, price, trader="bot"):
+def execute_trade(symbol, action, price, trader="bot", amount=None):
+    """
+    amount: (Optional) Specific dollar amount to trade. 
+            If None, defaults to 20% of balance.
+    """
     trader_id = 1 if trader == "bot" else 2
     
     status = get_portfolio_status(trader)
@@ -41,11 +45,21 @@ def execute_trade(symbol, action, price, trader="bot"):
     
     if action == "BUY":
         if symbol in positions:
+            # If we already own it, maybe we want to add more? 
+            # For simplicity, let's block duplicate entries for now.
             return f"❌ {trader.capitalize()} already holds {symbol}"
         
-        # Position sizing: Bot uses 20%, Human uses 20% (for fairness)
-        trade_amount = balance * 0.20
-        if trade_amount < 10: return "❌ Insufficient funds"
+        # DETERMINE TRADE SIZE
+        if amount:
+            trade_amount = float(amount)
+        else:
+            trade_amount = balance * 0.20
+            
+        if trade_amount > balance:
+            return f"❌ Insufficient funds (Cash: ${balance:.2f})"
+        
+        if trade_amount < 10: 
+            return "❌ Trade size too small (Min $10)"
         
         shares = trade_amount / price
         new_balance = balance - trade_amount
@@ -53,7 +67,7 @@ def execute_trade(symbol, action, price, trader="bot"):
         # Update DB
         supabase.table("portfolio").update({"balance": new_balance}).eq("id", trader_id).execute()
         supabase.table("positions").insert({
-            "symbol": symbol, "entry_price": price, "shares": shares, "trader": trader
+            "symbol": symbol, "entry_price": price, "shares": shares, "trader": trader, "highest_price": price
         }).execute()
         
         supabase.table("trade_history").insert({
@@ -63,7 +77,10 @@ def execute_trade(symbol, action, price, trader="bot"):
         
         return f"✅ {trader.upper()} BOUGHT {shares:.4f} {symbol} @ ${price:.2f}"
 
+    # ... (Keep SELL logic exactly the same) ...
     elif action == "SELL":
+        # ... (Your existing SELL code) ...
+        # (Paste the previous SELL block here)
         if symbol not in positions:
             return f"❌ {trader.capitalize()} doesn't own {symbol}"
         
