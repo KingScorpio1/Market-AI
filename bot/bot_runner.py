@@ -18,7 +18,7 @@ from backend.predictor import predict_next_price # <--- NEW
 from bot.telegram_bot import send_telegram_message
 
 # --- CONFIGURATION ---
-WATCHLIST = ["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "NVDA", "TSLA", "AAPL", "AMZN"]
+WATCHLIST =["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "USRNR-USD", "NVDA", "TSLA", "AAPL", "AMZN"]
 EMAIL_SENDER = "sulesmith38@gmail.com"
 EMAIL_PASSWORD = "xkns egss ipjs snhb" # Google App Password
 EMAIL_RECEIVER = "smithsule63@gmail.com"

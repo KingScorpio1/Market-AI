@@ -1,0 +1,44 @@
+======================================================
+🤖 MARKET AI BOT - STARTUP COMMANDS
+======================================================
+
+STEP 1: ACTIVATE YOUR VIRTUAL ENVIRONMENT
+(You must do this every time you open a new terminal)
+
+For Windows:
+venv\Scripts\activate
+
+For Mac/Linux:
+source venv/bin/activate
+
+------------------------------------------------------
+
+STEP 2: START THE SYSTEM (DASHBOARD + BOT)
+(This is the main command. It starts the visual 
+dashboard AND runs the bot in the background)
+
+python -m streamlit run dashboard/app.py
+
+------------------------------------------------------
+
+OPTIONAL COMMANDS:
+(Use these if you want to run the bots individually 
+WITHOUT opening the visual dashboard)
+
+Run the Hourly AI Scanner (Crypto & Stocks):
+python bot/bot_runner.py
+
+Run the 1-Minute Scalper Bot (Fast Stocks Only):
+python bot/stock_scalper.py
+
+------------------------------------------------------
+
+TROUBLESHOOTING COMMANDS:
+(Run this if you get a "ModuleNotFoundError")
+
+pip install -r requirements.txt
+
+======================================================
+HOW TO STOP THE SYSTEM:
+Click on the terminal window and press: Ctrl + C
+======================================================

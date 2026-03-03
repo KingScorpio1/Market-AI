@@ -11,17 +11,25 @@ exchange = ccxt.binance()
 
 def get_current_price(symbol, retries=3):
     """
-    Ultra-fast price check with built-in retry logic for socket errors.
+    Ultra-fast price check with built-in retry logic.
+    If Binance doesn't have the crypto (like USRNR), it falls back to Yahoo Finance.
     """
     for attempt in range(retries):
         try:
             if "-USD" in symbol: # Crypto
                 pair = symbol.replace("-USD", "/USDT")
-                ticker = exchange.fetch_ticker(pair)
-                return ticker['last']
+                try:
+                    # 1. Try Binance first (Ultra fast)
+                    ticker = exchange.fetch_ticker(pair)
+                    return ticker['last']
+                except:
+                    # 2. Fallback to Yahoo Finance (For micro-caps/DEX coins)
+                    ticker = yf.Ticker(symbol) 
+                    return ticker.fast_info['last_price']
             else: # Stocks
-                ticker = yf.Ticker(symbol) # Let yfinance handle the session natively
+                ticker = yf.Ticker(symbol)
                 return ticker.fast_info['last_price']
+                
         except Exception as e:
             if attempt == retries - 1:
                 return None

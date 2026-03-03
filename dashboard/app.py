@@ -43,7 +43,7 @@ st.title("🤖 AI Institutional Crypto & Stock Scanner")
 st.markdown("---")
 
 # --- WATCHLIST ---
-watchlist = ["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "NVDA", "TSLA", "AAPL", "AMZN", "COIN"]
+watchlist =["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "USRNR-USD", "NVDA", "TSLA", "AAPL", "AMZN", "COIN"]
 symbol = st.sidebar.selectbox("Select Asset", watchlist)
 st.sidebar.markdown("---")
 st.sidebar.caption("Auto-refreshes every 5 minutes")
